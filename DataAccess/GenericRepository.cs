@@ -1,23 +1,23 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Text;
 using System.Linq;
 using System.Data;
-
 using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore;
 using System.Threading.Tasks;
 
 namespace DataAccess
 {
-    public class GenericRepository<TEntity> where TEntity : class
+    public class GenericRepository<TEntity> : IRepository<TEntity> where TEntity : class
     {
-        internal DbContext _context;
-        internal DbSet<TEntity> _dbSet;
+        private readonly DbContext _context;
+
+        private readonly DbSet<TEntity> _dbSet;
 
         public GenericRepository(DbContext context)
         {
             _context = context;
+
             _dbSet = context.Set<TEntity>();
         }
 
@@ -54,12 +54,22 @@ namespace DataAccess
             }
         }
 
-        public async virtual Task<TEntity> FindByIdAsync(object id)
+        public async virtual Task<TEntity> GetByIdAsync(object id)
         {
             return await _dbSet.FindAsync(id);
         }
 
-        public async virtual Task<TEntity> Add(TEntity entity)
+        public virtual async Task<bool> ExistsAsync(Expression<Func<TEntity, bool>> filter)
+        {
+            return await _dbSet.AnyAsync(filter);
+        }
+
+        public async Task<TEntity> FindAsync(Expression<Func<TEntity, bool>> filter)
+        {
+            return await _dbSet.SingleOrDefaultAsync(filter);
+        }
+
+        public async virtual Task<TEntity> CreateAsync(TEntity entity)
         {
            var result = await  _dbSet.AddAsync(entity);
 
@@ -82,21 +92,24 @@ namespace DataAccess
             _dbSet.Remove(entityToDelete);
         }
 
-        public virtual void Update(TEntity entityToUpdate)
+        public async virtual Task<TEntity> UpdateAsyn(TEntity entity, object key)
         {
-            _dbSet.Attach(entityToUpdate);
-            _context.Entry(entityToUpdate).State = EntityState.Modified;
-        }
-        public virtual async Task<TEntity> UpdateAsyn(TEntity t, object key)
-        {
-            if (t == null)
+            if (entity == null)
                 return null;
-            TEntity exist = await _context.Set<TEntity>().FindAsync(key);
+
+            TEntity exist = await _dbSet.FindAsync(key);
+
             if (exist != null)
             {
-                _context.Entry(exist).CurrentValues.SetValues(t);
+                _context.Entry(exist).CurrentValues.SetValues(entity);
             }
+
             return exist;
+        }
+
+        public Task<int> CountAsync()
+        {
+            return _dbSet.CountAsync();
         }
     }
 }
